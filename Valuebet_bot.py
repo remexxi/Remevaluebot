@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 SUREBET_TOKEN = os.getenv('SUREBET_API_TOKEN')
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 BASE_URL = "https://api.apostasseguras.com"
-MIN_VALUE = 0.0
+MIN_VALUE = 8.0
 CHECK_INTERVAL = 60
 
 ya_enviadas = set()
@@ -36,7 +36,7 @@ def fetch_valuebets():
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chats_activos.add(update.effective_chat.id)
-    await update.message.reply_text(f"✅ Activado. Te avisaré de valuebets ≥ {MIN_VALUE}%.")
+    await update.message.reply_text(f"✅ Activado. Te avisaré de valuebets con valor ≥ {MIN_VALUE}%.")
 
 async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chats_activos.discard(update.effective_chat.id)
@@ -53,27 +53,27 @@ async def check_valuebets(app):
             continue
         for item in fetch_valuebets():
             try:
-                value = float(item.get("overvalue", 0))
+                overvalue = float(item.get("overvalue", 1))
+                value_pct = round((overvalue - 1) * 100, 2)
             except:
                 continue
-            if value < MIN_VALUE:
+            if value_pct < MIN_VALUE:
                 continue
-            prongs = item.get("prongs", [])
-            teams = prongs[0].get("teams", []) if prongs else []
+            teams = item.get("teams", [])
             event = " vs ".join(teams) if teams else "Sin nombre"
-            key = f"{event}_{value}"
+            key = f"{event}_{value_pct}"
             if key in ya_enviadas:
                 continue
             ya_enviadas.add(key)
-            casa = prongs[0].get("bk", "N/A") if prongs else "N/A"
-            cuota = prongs[0].get("value", "?") if prongs else "?"
-            t = prongs[0].get("type", {}) if prongs else {}
+            casa = item.get("bk", "N/A")
+            cuota = item.get("value", "?")
+            t = item.get("type", {})
             mercado = f"{t.get('variety', '')} {t.get('type', '')} {t.get('condition', '')}".strip()
             for chat_id in chats_activos:
                 try:
                     await app.bot.send_message(
                         chat_id=chat_id,
-                        text=f"📈 *VALUEBET*\n\n📊 {event}\n🏦 {casa} @{cuota}\n📋 Mercado: {mercado}\n💰 Value: *{value}%*",
+                        text=f"📈 *VALUEBET*\n\n📊 {event}\n🏦 {casa} @{cuota}\n📋 Mercado: {mercado}\n💰 Valor: *{value_pct}%*",
                         parse_mode="Markdown"
                     )
                 except:
